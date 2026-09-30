@@ -1,6 +1,7 @@
 import { useState } from 'react'
 import { SlidersHorizontal } from 'lucide-react'
 import { BottomNav } from './components/BottomNav'
+import { InstallBanner } from './components/InstallBanner'
 import { ThemeToggle } from './components/ThemeToggle'
 import { usePracticeTimer } from './hooks/useHabit'
 import { usePhrases } from './hooks/usePhrases'
@@ -60,6 +61,7 @@ function App() {
       </header>
 
       <main className="mx-auto max-w-2xl px-4 pb-28 sm:px-6">
+        <InstallBanner />
         {route === 'hoy' && <HoyScreen profile={profile} />}
         {route === 'shadowing' && <ShadowingScreen profile={profile} />}
         {route === 'conversar' && <ConversarScreen />}
