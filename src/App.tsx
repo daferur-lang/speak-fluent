@@ -1,96 +1,72 @@
-import { AlertTriangle } from 'lucide-react'
-import { useConversation } from './hooks/useConversation'
-import { useProgress } from './hooks/useProgress'
-import { MicButton } from './components/MicButton'
-import { StatusBadge } from './components/StatusBadge'
-import { SituationCard } from './components/SituationCard'
-import { WordFeedbackText } from './components/WordFeedbackText'
-import { AccuracyMeter } from './components/AccuracyMeter'
-import { TurnHistory } from './components/TurnHistory'
+import { useState } from 'react'
+import { SlidersHorizontal } from 'lucide-react'
+import { BottomNav } from './components/BottomNav'
 import { ThemeToggle } from './components/ThemeToggle'
-import { Waveform } from './components/Waveform'
-import { LevelBar } from './components/LevelBar'
-import { LevelUpBanner } from './components/LevelUpBanner'
+import { usePracticeTimer } from './hooks/useHabit'
+import { usePhrases } from './hooks/usePhrases'
+import { useProfile } from './hooks/useProfile'
+import { useRoute, type Route } from './hooks/useRoute'
+import { ConversarScreen } from './screens/ConversarScreen'
+import { FrasesScreen } from './screens/FrasesScreen'
+import { HoyScreen } from './screens/HoyScreen'
+import { Onboarding } from './screens/Onboarding'
+import { ShadowingScreen } from './screens/ShadowingScreen'
 
-const ERROR_COPY: Record<string, string> = {
-  'unsupported-browser': 'Tu navegador no soporta reconocimiento de voz. Prueba con Chrome o Edge en un ordenador o Android.',
-  'not-allowed': 'Necesito permiso para usar tu micrófono. Revisa los permisos del navegador e inténtalo de nuevo.',
-  'no-speech': 'No he escuchado nada. Acércate al micrófono e inténtalo otra vez.',
-  'ai-request-failed': 'No he podido conectar con tu compañero de conversación. Comprueba tu conexión e inténtalo de nuevo.',
+const TITLES: Record<Route, string> = {
+  hoy: 'Tu inglés de hoy',
+  shadowing: 'El gimnasio del inglés',
+  conversar: 'Tu compañero de conversación',
+  frases: 'Frases que haces tuyas',
 }
 
 function App() {
-  const { progress, recordResult, setActiveLevel, justLeveledUpTo, dismissLevelUp, levelCompletedCount } =
-    useProgress()
+  const { profile, setProfile } = useProfile()
+  const route = useRoute()
+  const { due } = usePhrases()
+  const [editingProfile, setEditingProfile] = useState(false)
+  usePracticeTimer(!!profile && !editingProfile && route !== 'hoy')
 
-  const { currentPrompt, status, errorMessage, history, startTurn, stopTurn, supported } = useConversation({
-    activeLevel: progress.activeLevel,
-    bestAccuracyByPromptId: progress.bestAccuracyByPromptId,
-    onResult: recordResult,
-  })
-
-  const lastTurn = history[history.length - 1]
-  const busy = status !== 'idle' && status !== 'error'
+  if (!profile) return <Onboarding onDone={setProfile} />
+  if (editingProfile) {
+    return (
+      <Onboarding
+        initial={profile}
+        onDone={(next) => {
+          setProfile(next)
+          setEditingProfile(false)
+        }}
+      />
+    )
+  }
 
   return (
     <div className="min-h-screen bg-[var(--bg)]">
-      <header className="mx-auto flex max-w-2xl items-center justify-between px-6 py-6">
-        <div>
-          <p className="text-xs uppercase tracking-[0.2em] text-primary font-semibold">Speak Fluent</p>
-          <h1 className="text-3xl">Tu compañero de conversación</h1>
+      <header className="mx-auto flex max-w-2xl items-center justify-between gap-3 px-4 py-5 sm:px-6">
+        <div className="min-w-0">
+          <p className="text-xs font-semibold uppercase tracking-[0.2em] text-primary">Speak Fluent</p>
+          <h1 className="text-2xl leading-tight sm:text-3xl">{TITLES[route]}</h1>
         </div>
-        <ThemeToggle />
+        <div className="flex shrink-0 gap-2">
+          <button
+            type="button"
+            onClick={() => setEditingProfile(true)}
+            aria-label="Cambiar mis temas y acento"
+            className="inline-flex h-11 w-11 cursor-pointer items-center justify-center rounded-full border border-[var(--border)] bg-[var(--surface)] text-[var(--ink)] transition-colors duration-200 hover:border-primary"
+          >
+            <SlidersHorizontal size={18} strokeWidth={1.75} />
+          </button>
+          <ThemeToggle />
+        </div>
       </header>
 
-      <main className="mx-auto flex max-w-2xl flex-col gap-6 px-6 pb-24">
-        {!supported && (
-          <div className="flex items-start gap-3 rounded-2xl border border-extra bg-extra-soft p-4 text-sm text-extra">
-            <AlertTriangle size={20} strokeWidth={1.75} className="mt-0.5 shrink-0" />
-            <p>{ERROR_COPY['unsupported-browser']}</p>
-          </div>
-        )}
-
-        {justLeveledUpTo && <LevelUpBanner level={justLeveledUpTo} onDismiss={dismissLevelUp} />}
-
-        <LevelBar
-          activeLevel={progress.activeLevel}
-          unlockedLevel={progress.unlockedLevel}
-          onSelect={setActiveLevel}
-          completedCount={levelCompletedCount}
-          disabled={busy}
-        />
-
-        <SituationCard prompt={currentPrompt} />
-
-        <section className="flex flex-col items-center gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] py-10">
-          <MicButton status={status} onStart={startTurn} onStop={stopTurn} disabled={!supported} />
-          <StatusBadge status={status} />
-          <Waveform active={status === 'listening'} />
-
-          {status === 'error' && errorMessage && (
-            <p className="max-w-sm text-center text-sm text-extra">
-              {ERROR_COPY[errorMessage] ?? 'Ha ocurrido un error. Inténtalo de nuevo.'}
-            </p>
-          )}
-
-          {lastTurn && status === 'idle' && (
-            <div className="mt-2 w-full border-t border-[var(--border)] px-6 pt-6">
-              <div className="flex items-start gap-4">
-                <div className="min-w-0 flex-1">
-                  <p className="mb-2 text-xs uppercase tracking-wide text-[var(--body-text)]/70">Lo que he escuchado</p>
-                  <WordFeedbackText words={lastTurn.words} />
-                </div>
-                <AccuracyMeter accuracy={lastTurn.accuracy} />
-              </div>
-            </div>
-          )}
-        </section>
-
-        <section>
-          <h2 className="mb-3 text-xl">Historial de práctica</h2>
-          <TurnHistory history={history} />
-        </section>
+      <main className="mx-auto max-w-2xl px-4 pb-28 sm:px-6">
+        {route === 'hoy' && <HoyScreen profile={profile} />}
+        {route === 'shadowing' && <ShadowingScreen profile={profile} />}
+        {route === 'conversar' && <ConversarScreen />}
+        {route === 'frases' && <FrasesScreen profile={profile} />}
       </main>
+
+      <BottomNav route={route} dueCount={due.length} />
     </div>
   )
 }

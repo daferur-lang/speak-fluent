@@ -4,7 +4,23 @@ PWA para practicar HABLAR inglés con progresión real por niveles (A1 → A2 �
 
 **En producción:** https://speak-fluent-app.web.app
 
-## Cómo funciona
+## Método (sep-2026)
+
+La app aplica la metodología de la entrevista «Experta en Aprendizaje Acelerado: Cómo aprender inglés más rápido desde casa» (Wall Street Wolverine): producir antes que estudiar gramática, shadowing, grabarse y reescucharse, escucha activa, relevancia personal + activación emocional + repetición espaciada, exposición diaria y constancia (20 min/día).
+
+| Pestaña | Qué hace | Código |
+|---|---|---|
+| Hoy | Situación del día (de tus temas), minutos de hoy vs objetivo de 20, racha con 1 día perdonado por semana, consejo de exposición | `src/screens/HoyScreen.tsx`, `src/lib/streak.ts` |
+| Shadowing · Imitar | Audio nativo (0.75x/1x, bucle) → te grabas → curvas de entonación superpuestas (semitonos relativos a tu mediana) + escucha A/B + tu primera toma | `src/screens/shadowing/ImitarPanel.tsx`, `src/lib/pitch.ts` |
+| Shadowing · Espejo | Lees un texto en voz alta, te grabas, te escuchas; palabras a revisar sin nota numérica | `src/screens/shadowing/EspejoPanel.tsx` |
+| Conversar | La conversación por voz con IA de siempre | `src/screens/ConversarScreen.tsx` |
+| Mis frases | Capturar una frase oída → traducir una vez → tu propia frase (obligatoria). Repaso espaciado FSRS **hablado**: el acierto de pronunciación se convierte en la nota | `src/screens/FrasesScreen.tsx`, `src/lib/srs.ts` |
+
+- **Audio de referencia**: 42 frases × acento US (Aria) y GB (Sonia) generadas con edge-tts en build (`npm run audio`, requiere `uv` e internet solo al generar). Van en `public/audio/` y se precachean: el shadowing funciona offline. `speechSynthesis` no sirve para esto porque su audio no se puede capturar y no habría curva de referencia.
+- **Datos**: perfil (temas + acento) en `localStorage`; frases, grabaciones (primera y última toma) y minutos por día en IndexedDB (`src/lib/db.ts`). Nada sale del dispositivo salvo la conversación con Gemini y el reconocimiento de voz de Chrome.
+- **Tests**: `npm test` (tono con señales sintéticas, normalización de curvas, FSRS, racha).
+
+## Cómo funciona (conversación)
 
 - **Reconocimiento y síntesis de voz**: Web Speech API del navegador (gratis, sin backend de voz). Mejor soporte en Chrome/Edge.
 - **Comparación de pronunciación**: alineación léxica (LCS) entre la frase objetivo y lo reconocido — marca palabras correctas, omitidas y de más. Ver `src/lib/pronunciation.ts`.
@@ -44,6 +60,8 @@ firebase deploy --only hosting --project speak-fluent-app
 
 ## Limitaciones conocidas
 
+- La curva de entonación compara la forma de la melodía, no la pronunciación de cada sonido. Si grabas con el audio nativo sonando por el altavoz, el micro lo capta: graba tú solo.
+- En algunos Android, Chrome no permite grabar (MediaRecorder) y transcribir (SpeechRecognition) a la vez: el Espejo lo avisa y deja escuchar la grabación igualmente.
 - Web Speech API no funciona en Firefox y tiene soporte limitado en Safari/iOS — se avisa en la propia app si el navegador no es compatible.
 - El feedback de pronunciación es léxico (qué palabras dijiste bien/mal), no fonético a nivel de sonido. Ampliarlo a scoring fonético real requeriría una API de pago (p. ej. Azure Pronunciation Assessment).
 - Sin conexión no funciona la práctica por voz (a diferencia de otras PWA sin backend): requiere red para llamar a Gemini.
