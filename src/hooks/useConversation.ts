@@ -99,9 +99,23 @@ export function useConversation({ activeLevel, bestAccuracyByPromptId, onResult 
             setStatus('idle')
             setCurrentPrompt(pickPrompt(activeLevel, bestAccuracyRef.current, currentPrompt.id))
           })
-        } catch {
-          setStatus('error')
-          setErrorMessage('ai-request-failed')
+        } catch (error) {
+          console.error('[conversation] la IA no respondió:', (error as Error).message)
+          // The pronunciation result is computed locally: keep the turn instead of losing it.
+          setHistory((prev) => [
+            ...prev,
+            {
+              situation: currentPrompt.situation,
+              target: currentPrompt.targetSentence,
+              heard: transcript,
+              accuracy,
+              words,
+              aiReply: '',
+              feedback: 'Tu compañero de IA no ha respondido esta vez, pero tu pronunciación sí cuenta. Sigue con la siguiente.',
+            },
+          ])
+          setStatus('idle')
+          setCurrentPrompt(pickPrompt(activeLevel, bestAccuracyRef.current, currentPrompt.id))
         }
       },
       (error) => {
