@@ -82,12 +82,16 @@ export function listenLong(onError: (message: string) => void): LongListenHandle
   recognition.onresult = (event) => {
     for (let i = event.resultIndex; i < event.results.length; i++) finals.push(event.results[i][0].transcript)
   }
+  // These won't fix themselves by restarting (no permission, mic busy, no network).
+  let fatal = false
   recognition.onerror = (event) => {
-    if (event.error !== 'no-speech' && event.error !== 'aborted') onError(event.error)
+    if (event.error === 'no-speech' || event.error === 'aborted') return
+    fatal = true
+    onError(event.error)
   }
   recognition.onend = () => {
     if (stopped) resolveEnd?.()
-    else recognition.start()
+    else if (!fatal) recognition.start()
   }
   recognition.start()
 
