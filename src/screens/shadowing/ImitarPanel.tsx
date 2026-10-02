@@ -5,9 +5,11 @@ import { ContextChips } from '../../components/ContextChips'
 import { MelodyChart } from '../../components/MelodyChart'
 import { PlayChip } from '../../components/PlayChip'
 import { RecordButton, type RecordState } from '../../components/RecordButton'
-import { CONTEXT_LABEL, matchesFilter, referenceAudioUrl, SHADOW_PHRASES, type ContextFilter } from '../../data/contexts'
+import { CONTEXT_LABEL, CONTEXTS, matchesFilter, referenceAudioUrl, SHADOW_PHRASES, type ContextFilter } from '../../data/contexts'
 import { encouragement, MIC_ERROR_COPY } from '../../data/encouragement'
 import { useShadowProgress } from '../../hooks/useShadowProgress'
+import { loadShadowPosition, saveShadowPosition } from '../../hooks/useShadowPosition'
+import { nextPendingIndex, resumeIndex } from '../../lib/shadowResume'
 import { hashParams } from '../../hooks/useRoute'
 import { addPhrase, usePhrases } from '../../hooks/usePhrases'
 import { decodeToMono, isRecordingSupported, playAudio, startRecording, stopAudio, type RecorderHandle } from '../../lib/audio'
@@ -32,6 +34,14 @@ function referenceCurve(url: string): Promise<Contour> {
 
 type Playing = 'ref' | 'me' | 'ab' | 'first' | null
 
+function phrasesFor(filter: ContextFilter, contexts: Profile['contexts']) {
+  return SHADOW_PHRASES.filter((p) => matchesFilter(p.context, filter, contexts))
+}
+
+function isValidFilter(value: unknown): value is ContextFilter {
+  return value === 'mine' || value === 'all' || CONTEXTS.some((c) => c.id === value)
+}
+
 interface TakeResult {
   /** null = this device couldn't transcribe while recording. */
   understood: { said: number; total: number; accuracy: number } | null
@@ -41,15 +51,19 @@ interface TakeResult {
 
 export function ImitarPanel({ profile }: { profile: Profile }) {
   const initialId = hashParams().get('id')
+  const { passed, markPassed } = useShadowProgress()
+  const [saved] = useState(loadShadowPosition)
   const [filter, setFilter] = useState<ContextFilter>(() => {
     const initial = SHADOW_PHRASES.find((p) => p.id === initialId)
-    return initial && !profile.contexts.includes(initial.context) ? 'all' : 'mine'
+    if (initial) return profile.contexts.includes(initial.context) ? 'mine' : 'all'
+    return isValidFilter(saved.filter) ? saved.filter : 'mine'
   })
-  const list = useMemo(
-    () => SHADOW_PHRASES.filter((p) => matchesFilter(p.context, filter, profile.contexts)),
-    [filter, profile.contexts],
-  )
-  const [index, setIndex] = useState(() => Math.max(0, list.findIndex((p) => p.id === initialId)))
+  const list = useMemo(() => phrasesFor(filter, profile.contexts), [filter, profile.contexts])
+  // A link to a specific phrase wins; otherwise continue at the first pending phrase from where we left off.
+  const [index, setIndex] = useState(() => {
+    const linked = list.findIndex((p) => p.id === initialId)
+    return linked >= 0 ? linked : resumeIndex(list.map((p) => p.id), saved.phraseId ?? null, passed)
+  })
   const phrase = list[Math.min(index, list.length - 1)]
   const phraseId = phrase?.id
   const refUrl = phrase ? referenceAudioUrl(phrase.id, profile.accent) : ''
@@ -72,7 +86,6 @@ export function ImitarPanel({ profile }: { profile: Profile }) {
   const takesCount = useRef(0)
   const listener = useRef<LongListenHandle | null>(null)
   const recognitionFailed = useRef(false)
-  const { passed, markPassed } = useShadowProgress()
   const passedInList = list.filter((p) => passed.has(p.id)).length
 
   const { phrases } = usePhrases()
@@ -102,6 +115,10 @@ export function ImitarPanel({ profile }: { profile: Profile }) {
   }, [refUrl, phraseId])
 
   useEffect(() => () => stopAll(), [])
+
+  useEffect(() => {
+    if (phraseId) saveShadowPosition({ filter, phraseId })
+  }, [filter, phraseId])
 
   function stopAll() {
     playToken.current++
@@ -214,10 +231,19 @@ export function ImitarPanel({ profile }: { profile: Profile }) {
     setIndex((i) => (i + delta + list.length) % list.length)
   }
 
+  function goNextPending() {
+    setIndex((i) => nextPendingIndex(list.map((p) => p.id), i, passed, false))
+  }
+
+  function changeFilter(next: ContextFilter) {
+    setFilter(next)
+    setIndex(resumeIndex(phrasesFor(next, profile.contexts).map((p) => p.id), null, passed))
+  }
+
   if (!phrase) {
     return (
       <>
-        <ContextChips value={filter} onChange={(f) => (setFilter(f), setIndex(0))} />
+        <ContextChips value={filter} onChange={changeFilter} />
         <p className="text-sm">No hay frases para este tema.</p>
       </>
     )
@@ -225,7 +251,7 @@ export function ImitarPanel({ profile }: { profile: Profile }) {
 
   return (
     <div className="flex flex-col gap-5">
-      <ContextChips value={filter} onChange={(f) => (setFilter(f), setIndex(0))} />
+      <ContextChips value={filter} onChange={changeFilter} />
 
       <article className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 sm:p-6">
         <div className="mb-3 flex items-center justify-between gap-2 text-xs uppercase tracking-wide">
@@ -338,7 +364,7 @@ export function ImitarPanel({ profile }: { profile: Profile }) {
                 </div>
                 <button
                   type="button"
-                  onClick={() => go(1)}
+                  onClick={goNextPending}
                   className="inline-flex min-h-12 cursor-pointer items-center justify-center gap-2 rounded-full bg-primary px-5 font-semibold text-[var(--color-surface)] hover:bg-primary-hover"
                 >
                   Siguiente frase <ChevronRight size={18} />

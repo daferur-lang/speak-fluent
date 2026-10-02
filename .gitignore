@@ -26,3 +26,6 @@ functions/node_modules
 *.njsproj
 *.sln
 *.sw?
+
+# Herramientas locales
+.serena/

@@ -10,13 +10,17 @@ import { getRecording, saveRecording } from '../../lib/db'
 import { scorePronunciation } from '../../lib/pronunciation'
 import { isSpeechRecognitionSupported, listenLong, speak, type LongListenHandle } from '../../lib/speech'
 import type { Profile } from '../../hooks/useProfile'
+import { loadShadowPosition, saveShadowPosition } from '../../hooks/useShadowPosition'
 
 export function EspejoPanel({ profile }: { profile: Profile }) {
   const texts = useMemo(
     () => [...MIRROR_TEXTS].sort((a, b) => Number(profile.contexts.includes(b.context)) - Number(profile.contexts.includes(a.context))),
     [profile.contexts],
   )
-  const [textId, setTextId] = useState(texts[0].id)
+  const [textId, setTextId] = useState(() => {
+    const saved = loadShadowPosition().mirrorTextId
+    return texts.some((t) => t.id === saved) ? saved! : texts[0].id
+  })
   const text = texts.find((t) => t.id === textId) ?? texts[0]
   const lang = profile.accent === 'gb' ? 'en-GB' : 'en-US'
 
@@ -33,6 +37,7 @@ export function EspejoPanel({ profile }: { profile: Profile }) {
   const recognitionFailed = useRef(false)
 
   useEffect(() => {
+    saveShadowPosition({ mirrorTextId: textId })
     stopAudio()
     setTake(null)
     setToReview(null)
